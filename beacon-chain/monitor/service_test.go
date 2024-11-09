@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	logTest "github.com/sirupsen/logrus/hooks/test"
+
 	mock "github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain/testing"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -20,7 +22,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/testing/require"
 	"github.com/prysmaticlabs/prysm/v5/testing/util"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	logTest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func setupService(t *testing.T) *Service {
@@ -65,6 +66,20 @@ func setupService(t *testing.T) *Service {
 			balance: 31900000000,
 		},
 	}
+	attestationStats := map[primitives.ValidatorIndex]*AttestationStats{
+		1: {
+			failureReasons: map[string]int{},
+		},
+		2: {
+			failureReasons: map[string]int{},
+		},
+		12: {
+			failureReasons: map[string]int{},
+		},
+		15: {
+			failureReasons: map[string]int{},
+		},
+	}
 	aggregatedPerformance := map[primitives.ValidatorIndex]ValidatorAggregatedPerformance{
 		1: {
 			startEpoch:                      0,
@@ -101,6 +116,7 @@ func setupService(t *testing.T) *Service {
 		latestPerformance:           latestPerformance,
 		aggregatedPerformance:       aggregatedPerformance,
 		trackedSyncCommitteeIndices: trackedSyncCommitteeIndices,
+		attestationStats:            attestationStats,
 		lastSyncedEpoch:             0,
 	}
 }

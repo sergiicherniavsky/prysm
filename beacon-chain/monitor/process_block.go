@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/blocks"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
 	"github.com/prysmaticlabs/prysm/v5/config/params"
@@ -11,7 +13,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/encoding/bytesutil"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 // AggregateReportingPeriod defines the number of epochs between aggregate reports.
@@ -52,6 +53,7 @@ func (s *Service) processBlock(ctx context.Context, b interfaces.ReadOnlySignedB
 	if currEpoch != lastSyncedEpoch &&
 		slots.SyncCommitteePeriod(currEpoch) == slots.SyncCommitteePeriod(lastSyncedEpoch) {
 		s.updateSyncCommitteeTrackedVals(st)
+		s.logAttentionStats()
 	}
 
 	s.processSyncAggregate(st, blk)
@@ -176,5 +178,12 @@ func (s *Service) logAggregatedPerformance() {
 			"totalAggregations":        p.totalAggregations,
 			"totalSyncContributions":   p.totalSyncCommitteeContributions,
 		}).Info("Aggregated performance since launch")
+	}
+}
+
+// logAttentionStats logs the aggregated attestation statistics.
+func (s *Service) logAttentionStats() {
+	for _, p := range s.attestationStats {
+		p.Summary(log)
 	}
 }

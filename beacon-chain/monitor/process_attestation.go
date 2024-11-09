@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/altair"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/helpers"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state"
@@ -15,7 +17,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/proto/prysm/v1alpha1/attestation"
 	"github.com/prysmaticlabs/prysm/v5/runtime/version"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 // canUpdateAttestedValidator returns true if the validator is tracked and if the
@@ -71,12 +72,17 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 	}
 	s.Lock()
 	defer s.Unlock()
+
 	for _, idx := range attestingIndices {
 		if s.canUpdateAttestedValidator(primitives.ValidatorIndex(idx), att.GetData().Slot) {
 			logFields := logMessageTimelyFlagsForIndex(primitives.ValidatorIndex(idx), att.GetData())
+			var reasonFailure string
+
 			balance, err := state.BalanceAtIndex(primitives.ValidatorIndex(idx))
 			if err != nil {
-				log.WithError(err).Error("Could not get balance")
+				reasonFailure = "Could not get balance"
+				log.WithError(err).Error(reasonFailure)
+				s.attestationStats[primitives.ValidatorIndex(idx)].RecordFailure(reasonFailure)
 				return
 			}
 
@@ -103,32 +109,42 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 					slots.ToEpoch(latestPerf.attestedSlot) {
 					participation, err = state.CurrentEpochParticipation()
 					if err != nil {
-						log.WithError(err).Error("Could not get current epoch participation")
+						reasonFailure = "Could not get current epoch participation"
+						log.WithError(err).Error(reasonFailure)
+						s.attestationStats[primitives.ValidatorIndex(idx)].RecordFailure(reasonFailure)
 						return
 					}
 				} else {
 					participation, err = state.PreviousEpochParticipation()
 					if err != nil {
-						log.WithError(err).Error("Could not get previous epoch participation")
+						reasonFailure = "Could not get previous epoch participation"
+						log.WithError(err).Error(reasonFailure)
+						s.attestationStats[primitives.ValidatorIndex(idx)].RecordFailure(reasonFailure)
 						return
 					}
 				}
 				flags := participation[idx]
 				hasFlag, err := altair.HasValidatorFlag(flags, sourceIdx)
 				if err != nil {
-					log.WithError(err).Error("Could not get timely Source flag")
+					reasonFailure = "Could not get timely Source flag"
+					log.WithError(err).Error(reasonFailure)
+					s.attestationStats[primitives.ValidatorIndex(idx)].RecordFailure(reasonFailure)
 					return
 				}
 				latestPerf.timelySource = hasFlag
 				hasFlag, err = altair.HasValidatorFlag(flags, headIdx)
 				if err != nil {
-					log.WithError(err).Error("Could not get timely Head flag")
+					reasonFailure = "Could not get timely Head flag"
+					log.WithError(err).Error(reasonFailure)
+					s.attestationStats[primitives.ValidatorIndex(idx)].RecordFailure(reasonFailure)
 					return
 				}
 				latestPerf.timelyHead = hasFlag
 				hasFlag, err = altair.HasValidatorFlag(flags, targetIdx)
 				if err != nil {
-					log.WithError(err).Error("Could not get timely Target flag")
+					reasonFailure = "Could not get timely Target flag"
+					log.WithError(err).Error(reasonFailure)
+					s.attestationStats[primitives.ValidatorIndex(idx)].RecordFailure(reasonFailure)
 					return
 				}
 				latestPerf.timelyTarget = hasFlag
@@ -155,6 +171,7 @@ func (s *Service) processIncludedAttestation(ctx context.Context, state state.Be
 
 			s.latestPerformance[primitives.ValidatorIndex(idx)] = latestPerf
 			s.aggregatedPerformance[primitives.ValidatorIndex(idx)] = aggregatedPerf
+			s.attestationStats[primitives.ValidatorIndex(idx)].RecordSuccess()
 			log.WithFields(logFields).Info("Attestation included")
 		}
 	}

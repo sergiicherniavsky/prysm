@@ -6,6 +6,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/prysmaticlabs/prysm/v5/async/event"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/blockchain"
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/core/feed"
@@ -16,7 +18,6 @@ import (
 	"github.com/prysmaticlabs/prysm/v5/beacon-chain/state/stategen"
 	"github.com/prysmaticlabs/prysm/v5/consensus-types/primitives"
 	"github.com/prysmaticlabs/prysm/v5/time/slots"
-	"github.com/sirupsen/logrus"
 )
 
 // Error when the context is closed while waiting for sync.
@@ -76,6 +77,7 @@ type Service struct {
 	TrackedValidators           map[primitives.ValidatorIndex]bool
 	latestPerformance           map[primitives.ValidatorIndex]ValidatorLatestPerformance
 	aggregatedPerformance       map[primitives.ValidatorIndex]ValidatorAggregatedPerformance
+	attestationStats            map[primitives.ValidatorIndex]*AttestationStats
 	trackedSyncCommitteeIndices map[primitives.ValidatorIndex][]primitives.CommitteeIndex
 	lastSyncedEpoch             primitives.Epoch
 }
@@ -90,6 +92,7 @@ func NewService(ctx context.Context, config *ValidatorMonitorConfig, tracked []p
 		TrackedValidators:           make(map[primitives.ValidatorIndex]bool, len(tracked)),
 		latestPerformance:           make(map[primitives.ValidatorIndex]ValidatorLatestPerformance),
 		aggregatedPerformance:       make(map[primitives.ValidatorIndex]ValidatorAggregatedPerformance),
+		attestationStats:            make(map[primitives.ValidatorIndex]*AttestationStats),
 		trackedSyncCommitteeIndices: make(map[primitives.ValidatorIndex][]primitives.CommitteeIndex),
 		isLogging:                   false,
 	}
@@ -151,7 +154,7 @@ func (s *Service) run() {
 	s.monitorRoutine(stateChannel, stateSub)
 }
 
-// initializePerformanceStructures initializes the validatorLatestPerformance
+// initializePerformanceStructures initializes the validatorLatestPerformance, attestationStats
 // and validatorAggregatedPerformance for each tracked validator.
 func (s *Service) initializePerformanceStructures(state state.BeaconState, epoch primitives.Epoch) {
 	for idx := range s.TrackedValidators {
@@ -167,6 +170,9 @@ func (s *Service) initializePerformanceStructures(state state.BeaconState, epoch
 		}
 		s.latestPerformance[idx] = ValidatorLatestPerformance{
 			balance: balance,
+		}
+		s.attestationStats[idx] = &AttestationStats{
+			failureReasons: make(map[string]int),
 		}
 	}
 }
